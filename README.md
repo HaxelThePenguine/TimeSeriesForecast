@@ -1,2 +1,18 @@
 # TimeSeriesForecast
-Semplice repository dove sono implementati due esperimenti su due differenti dataset (Voli in Europa e lo storico prezzi dell' S&amp;P500 ), tali esperimenti predittivi implementano diversi algoritmi tra cui ARIMA, ARIMAX, Linear e Logistic Regression ed Hidden Markov Model 
+
+
+## Primo Esperimento (S&P500)
+Il primo esperimento si compone di diversi file dove sono implementate in python i vari algoritimi testati: 
+1. ARIMA/ARIMAX
+2. Logistic/Linear Regression
+3. Hidden Markov Model con le sue differenti iterazioni
+
+Il dataset si trova in SP500Data.csv e deriva da una semplice richiesta `data = yf.download(ticker, start=start_date)`
+
+## Secondo Esperimetno (Voli Europei 2016+)
+In questo secondo esperimento invece è stata realizzato il medesimo confront con metodologie differenti su un altro dataset tra:
+1. ARIMA
+2. SARIMA
+3. ETS
+
+Qui il dataset invece è stato scaricato in formato csv da kaggle (https://www.kaggle.com/datasets/umerhaddii/european-flights-dataset?resource=download)
