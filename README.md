@@ -15,4 +15,4 @@ In questo secondo esperimento invece è stata realizzato il medesimo confront co
 2. SARIMA
 3. ETS
 
-Qui il dataset invece è stato scaricato in formato csv da kaggle (https://www.kaggle.com/datasets/umerhaddii/european-flights-dataset?resource=download)
+Qui il dataset invece è stato scaricato in formato csv da kaggle a causa del peso non uploadabile qui su github (https://www.kaggle.com/datasets/umerhaddii/european-flights-dataset?resource=download)
