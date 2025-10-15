@@ -7,7 +7,7 @@ Il primo esperimento si compone di diversi file dove sono implementate in python
 2. Logistic/Linear Regression
 3. Hidden Markov Model con le sue differenti iterazioni
 
-Il dataset si trova in SP500Data.csv e deriva da una semplice richiesta `data = yf.download(ticker, start=start_date)`
+Il dataset si trova in SP500Data.csv e deriva da una semplice richiesta attraverso le api yfinance `data = yf.download(ticker, start=start_date)`
 
 ## Secondo Esperimetno (Voli Europei 2016+)
 In questo secondo esperimento invece è stata realizzato il medesimo confront con metodologie differenti su un altro dataset tra:
