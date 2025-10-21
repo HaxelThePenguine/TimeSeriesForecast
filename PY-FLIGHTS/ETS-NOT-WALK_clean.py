@@ -19,60 +19,6 @@ pero per chiarezza diciamo va bene così
 '''
 
 
-## Analisi dei vari dati (cerca pattern, stagionalità, trend, ecc.)
-
-def detect_seasonality_pattern(series):
-    """
-    Rileva pattern stagionali
-    """
-    print("\nRILEVAMENTO PATTERN STAGIONALI")
-    print("="*50)
-
-    if len(series) >= 14:
-        try:
-            decomposition_weekly = seasonal_decompose(series, model='additive', period=7, extrapolate_trend='freq')
-            weekly_seasonal_var = np.var(decomposition_weekly.seasonal)
-            print(f"Varianza stagionale settimanale: {weekly_seasonal_var:.0f}")
-        except:
-            weekly_seasonal_var = 0
-    else:
-        weekly_seasonal_var = 0
-
-    if len(series) >= 60:
-        try:
-            decomposition_monthly = seasonal_decompose(series, model='additive', period=30, extrapolate_trend='freq')
-            monthly_seasonal_var = np.var(decomposition_monthly.seasonal)
-            print(f"Varianza stagionale mensile: {monthly_seasonal_var:.0f}")
-        except:
-            monthly_seasonal_var = 0
-    else:
-        monthly_seasonal_var = 0
-
-    if len(series) >= 730:
-        try:
-            decomposition_yearly = seasonal_decompose(series, model='additive', period=365, extrapolate_trend='freq')
-            yearly_seasonal_var = np.var(decomposition_yearly.seasonal)
-            print(f"Varianza stagionale annuale: {yearly_seasonal_var:.0f}")
-        except:
-            yearly_seasonal_var = 0
-    else:
-        yearly_seasonal_var = 0
-
-    seasonal_vars = {
-        7: weekly_seasonal_var,
-        30: monthly_seasonal_var,
-        365: yearly_seasonal_var
-    }
-
-    best_period = max(seasonal_vars, key=seasonal_vars.get)
-    if seasonal_vars[best_period] > series.var() * 0.01:
-        print(f"Pattern stagionale rilevato: periodo {best_period}")
-        return best_period
-    else:
-        print("Nessun pattern stagionale significativo rilevato")
-        return None
-
-
 # Selezione automatica modello ETS
 
 def auto_ets_model_selection(series, seasonal_period=None):
@@ -89,7 +35,8 @@ def auto_ets_model_selection(series, seasonal_period=None):
         {'trend': 'add', 'seasonal': None, 'name': 'Holt Linear Trend'},
         {'trend': 'mul', 'seasonal': None, 'name': 'Holt Exponential Trend'}
     ])
-    seasonal_period =7
+
+    seasonal_period=7
     if seasonal_period and seasonal_period <= len(series) // 2:
         models_to_test.extend([
             {'trend': 'add', 'seasonal': 'add', 'seasonal_periods': seasonal_period, 'name': 'Holt-Winters Additive'},
@@ -306,7 +253,7 @@ def main():
     print(f"Periodo: {data.index[0].strftime('%Y-%m-%d')} → {data.index[-1].strftime('%Y-%m-%d')}")
 
 
-    seasonal_period = detect_seasonality_pattern(data['Close'])
+    seasonal_period = 7
 
 
 
