@@ -1,0 +1,455 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from statsmodels.tsa.statespace.sarimax import SARIMAX # importazione SARIMA basta non metter l'exogenous
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.seasonal import seasonal_decompose
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import warnings
+warnings.filterwarnings('ignore')
+
+sns.set_theme(style="whitegrid", context="talk")
+
+'''
+Anche qui si potevano condensare tutti le funzioni e i modelli in un solo file
+probabilmente andava anche meglio
+pero per chiarezza diciamo va bene così
+
+'''
+
+
+
+
+## Analisi dei vari dati (cerca pattern, stagionalità, trend, ecc.)
+
+def detect_optimal_seasonal_period(series):
+    """
+    Rileva periodo stagionale ottimale per SARIMA
+    """
+    print("\nRILEVAMENTO PERIODO STAGIONALE OTTIMALE")
+    print("="*50)
+
+    periods_to_test = [7, 30]
+    seasonal_strengths = {}
+
+    for period in periods_to_test:
+        if len(series) >= 3 * period:
+            try:
+                decomposition = seasonal_decompose(series, model='additive', period=period, extrapolate_trend='freq')
+                seasonal_var = np.var(decomposition.seasonal)
+                total_var = np.var(series)
+                strength = seasonal_var / total_var * 100
+                seasonal_strengths[period] = strength
+
+                period_name = {7: 'Settimanale', 30: 'Mensile'}[period]
+                print(f"{period_name} (periodo {period}): {strength:.2f}% varianza stagionale")
+
+            except Exception as e:
+                print(f"Periodo {period}: Errore nella decomposizione")
+                seasonal_strengths[period] = 0
+        else:
+            print(f"Periodo {period}: Dati insufficienti")
+            seasonal_strengths[period] = 0
+
+    if seasonal_strengths:
+        best_period = max(seasonal_strengths, key=seasonal_strengths.get)
+        best_strength = seasonal_strengths[best_period]
+
+        if best_strength > 2:
+            period_name = {7: 'Settimanale', 30: 'Mensile'}[best_period]
+            print(f"\nPeriodo stagionale ottimale: {period_name} (s={best_period})")
+            return best_period
+        else:
+            print(f"\nStagionalità debole - uso periodo settimanale default (s=7)")
+            return 7 
+    else:
+        print("\nImpossibile rilevare stagionalità - uso periodo settimanale default")
+        return 7
+
+def test_stationarity_seasonal(series, seasonal_period=None):
+    """
+    Test di stazionarietà con differenziazione stagionale per SARIMA
+    """
+    print("\nTEST DI STAZIONARIETÀ (SARIMA)")
+    print("="*50)
+
+    result_original = adfuller(series.dropna())
+    print(f"Serie originale:")
+    print(f"   ADF Statistic: {result_original[0]:.4f}")
+    print(f"   p-value: {result_original[1]:.6f}")
+    print(f"   Stazionaria: {'SI' if result_original[1] < 0.05 else 'NO'}")
+
+    d_recommended = 0
+    D_recommended = 0
+
+    current_series = series.copy()
+    for d in range(1, 3):
+        current_series = current_series.diff().dropna()
+        if len(current_series) > 10:
+            result_diff = adfuller(current_series)
+            print(f"Serie con {d} differenziazione(i) regolare(i):")
+            print(f"   ADF Statistic: {result_diff[0]:.4f}")
+            print(f"   p-value: {result_diff[1]:.6f}")
+            print(f"   Stazionaria: {'SI' if result_diff[1] < 0.05 else 'NO'}")
+
+            if result_diff[1] < 0.05 and d_recommended == 0:
+                d_recommended = d
+                print(f"   → d = {d} sufficiente per stazionarietà")
+                break
+
+    if seasonal_period and seasonal_period <= len(series) // 3:
+        print(f"\nTest differenziazione stagionale (periodo {seasonal_period}):")
+        seasonal_diff = series.diff(seasonal_period).dropna()
+
+        if len(seasonal_diff) > 10:
+            result_seasonal = adfuller(seasonal_diff)
+            print(f"Serie con 1 differenziazione stagionale:")
+            print(f"   ADF Statistic: {result_seasonal[0]:.4f}")
+            print(f"   p-value: {result_seasonal[1]:.6f}")
+            print(f"   Stazionaria: {'SI' if result_seasonal[1] < 0.05 else 'NO'}")
+
+            if result_seasonal[1] < 0.05:
+                D_recommended = 1
+                print(f"   → D = 1 necessario per stazionarietà stagionale")
+
+    print(f"\nRaccomandazioni differenziazione:")
+    print(f"   d (regolare): {d_recommended}")
+    print(f"   D (stagionale): {D_recommended}")
+
+    return d_recommended, D_recommended
+
+
+# Funzioni effettive SARIMA
+
+#scelta ordini
+def auto_sarima_order_selection(series, seasonal_period=None, max_p=1, max_q=1, max_P=1, max_Q=1):
+    """
+    Selezione automatica ordini SARIMA con AIC
+    """
+    print("\nSELEZIONE AUTOMATICA ORDINI SARIMA")
+    print("="*50)
+
+    d, D = test_stationarity_seasonal(series, seasonal_period)
+
+    if seasonal_period is None or seasonal_period > 30:
+        print("Nessuna stagionalità o periodo troppo lungo → uso ARIMA semplice")
+        seasonal_period = 0
+        max_P = 0
+        max_Q = 0
+        D = 0
+
+    best_aic = np.inf
+    best_order = (1, d, 1)
+    best_seasonal_order = (0, D, 0, seasonal_period)
+    aic_results = []
+
+    # aumentabile combinazioni di p, q, P, Q
+    total_models = (max_p + 1) * (max_q + 1) * (max_P + 1) * (max_Q + 1)
+    print(f"Testing {total_models} combinazioni SARIMA...")
+    print(f"Formato: SARIMA(p,d,q)(P,D,Q,{seasonal_period})")
+
+    model_count = 0
+    for p in range(max_p + 1):
+        for q in range(max_q + 1):
+            for P in range(max_P + 1):
+                for Q in range(max_Q + 1):
+                    try:
+                        model_count += 1
+                        if seasonal_period > 0:
+                            model = SARIMAX(series, order=(p, d, q),
+                                          seasonal_order=(P, D, Q, seasonal_period))
+                        else:
+                            model = SARIMAX(series, order=(p, d, q))
+
+                        fitted_model = model.fit(disp=False, maxiter=20, method='lbfgs')
+
+                        aic = fitted_model.aic
+                        aic_results.append({
+                            'p': p, 'd': d, 'q': q,
+                            'P': P, 'D': D, 'Q': Q, 's': seasonal_period,
+                            'aic': aic
+                        })
+
+                        if aic < best_aic:
+                            best_aic = aic
+                            best_order = (p, d, q)
+                            best_seasonal_order = (P, D, Q, seasonal_period)
+
+                        if model_count <= 20:
+                            print(f"   SARIMA({p},{d},{q})({P},{D},{Q},{seasonal_period}): AIC = {aic:.2f}")
+                        elif model_count == 21:
+                            print("   ... (altri modelli testati silenziosamente)")
+
+                    except Exception as e:
+                        if model_count <= 20:
+                            print(f"   SARIMA({p},{d},{q})({P},{D},{Q},{seasonal_period}): Failed")
+                        continue
+
+    print(f"\nMODELLO OTTIMALE: SARIMA{best_order}{best_seasonal_order} con AIC = {best_aic:.2f}")
+
+    return best_order, best_seasonal_order, best_aic, aic_results
+
+# fit e forecasting
+def fit_sarima_and_forecast(series, order, seasonal_order, forecast_periods=18):
+    """
+    Fit SARIMA e generazione previsioni
+    """
+    print(f"\nFIT MODELLO SARIMA{order}{seasonal_order}")
+    print("="*50)
+
+    try:
+        if seasonal_order[3] > 0:
+            model = SARIMAX(series, order=order, seasonal_order=seasonal_order)
+        else:
+            model = SARIMAX(series, order=order)
+
+        fitted_model = model.fit(disp=False, maxiter=100)
+
+        print(f"Modello fittato con successo")
+        print(f"AIC: {fitted_model.aic:.2f}")
+        print(f"BIC: {fitted_model.bic:.2f}")
+        print(f"Log-likelihood: {fitted_model.llf:.2f}")
+
+        residuals = fitted_model.resid
+
+        try:
+            ljung_box = fitted_model.test_serial_correlation(method='ljungbox', lags=10)
+            ljung_box_pvalue = 0.5
+            if hasattr(ljung_box, 'pvalue'):
+                ljung_box_pvalue = float(ljung_box.pvalue)
+            elif hasattr(ljung_box, 'shape') and ljung_box.shape[0] > 0:
+                ljung_box_pvalue = float(ljung_box.iloc[0, 1])
+        except:
+            ljung_box_pvalue = 0.5
+
+        print(f"Ljung-Box test p-value: {ljung_box_pvalue:.4f}")
+        print(f"   Residui indipendenti: {'SI' if ljung_box_pvalue > 0.05 else 'NO'}")
+
+        forecast_result = fitted_model.get_forecast(steps=forecast_periods)
+        forecast_values = forecast_result.predicted_mean
+        conf_int = forecast_result.conf_int()
+
+        print(f"Previsioni generate per {forecast_periods} periodi futuri")
+
+        return {
+            'fitted_model': fitted_model,
+            'forecast_values': forecast_values,
+            'confidence_intervals': conf_int,
+            'residuals': residuals,
+            'aic': fitted_model.aic,
+            'bic': fitted_model.bic,
+            'ljung_box_pvalue': ljung_box_pvalue
+        }
+
+    except Exception as e:
+        print(f"Errore nel fit del modello: {str(e)}")
+        try:
+            print("Tentativo con SARIMA(1,1,1)(0,0,0,0) semplificato...")
+            model_simple = SARIMAX(series, order=(1,1,1))
+            fitted_simple = model_simple.fit(disp=False)
+
+            forecast_simple = fitted_simple.get_forecast(steps=forecast_periods)
+
+            return {
+                'fitted_model': fitted_simple,
+                'forecast_values': forecast_simple.predicted_mean,
+                'confidence_intervals': forecast_simple.conf_int(),
+                'residuals': fitted_simple.resid,
+                'aic': fitted_simple.aic,
+                'bic': fitted_simple.bic,
+                'ljung_box_pvalue': 0.5
+            }
+        except Exception as e2:
+            print(f"Anche modello semplificato fallito: {str(e2)}")
+            return None
+
+
+# solite metriche e visulizzazioni 
+def calculate_forecast_metrics(actual, predicted):
+    """
+    Calcola metriche di previsione
+    """
+    print("\nCALCOLO METRICHE DI PREVISIONE")
+    print("="*50)
+
+    mse_insample = mean_squared_error(actual, predicted[:len(actual)])
+    mae_insample = mean_absolute_error(actual, predicted[:len(actual)])
+    rmse_insample = np.sqrt(mse_insample)
+    mape_insample = np.mean(np.abs((actual - predicted[:len(actual)]) / actual)) * 100
+
+    r2_insample = r2_score(actual, predicted[:len(actual)])
+
+    print(f"METRICHE IN-SAMPLE:")
+    print(f"   R² Score: {r2_insample:.4f}")
+    print(f"   MSE: {mse_insample:.0f} voli²")
+    print(f"   RMSE: {rmse_insample:.0f} voli")
+    print(f"   MAE: {mae_insample:.0f} voli")
+    print(f"   MAPE: {mape_insample:.2f}%")
+
+
+    return {
+        'r2_insample': r2_insample,
+        'mse_insample': mse_insample,
+        'rmse_insample': rmse_insample,
+        'mae_insample': mae_insample,
+        'mape_insample': mape_insample,
+        
+    }
+
+# no visualizzazioni
+
+def main():
+    print("SARIMA SEMPLICE - VOLI EUROPEI 2016+")
+    print("="*60)
+
+    file_path = 'DATA/flights.csv'
+
+    data = pd.read_csv(file_path)
+
+    print(f"Colonne disponibili: {list(data.columns)}")
+    print(f"Prime 3 righe:")
+    print(data.head(3))
+
+    # casino per il parsing delle colonne valori e date
+    if 'FLT_DATE' in data.columns and 'FLT_TOT_1' in data.columns:
+        print("Rilevato file voli europei standard")
+        date_column = 'FLT_DATE'
+        value_column = 'FLT_TOT_1'
+    else:
+        date_column = None
+        for col in data.columns:
+            if col.lower() in ['date', 'data', 'datetime', 'timestamp', 'time', 'flt_date']:
+                date_column = col
+                break
+
+        if date_column is None:
+            date_column = data.columns[0]
+            print(f"Usando prima colonna come data: {date_column}")
+
+        value_column = None
+        for col in data.columns:
+            if col.lower() in ['close', 'voli', 'flights', 'value', 'volume', 'count', 'flt_tot_1']:
+                value_column = col
+                break
+
+        if value_column is None:
+            value_column = data.columns[1] if len(data.columns) > 1 else data.columns[0]
+            print(f"Usando colonna come valore: {value_column}")
+
+    print(f"Colonna data selezionata: {date_column}")
+    print(f"Colonna valore selezionata: {value_column}")
+
+    try:
+        if 'T' in str(data[date_column].iloc[0]):
+            data[date_column] = pd.to_datetime(data[date_column], format='%Y-%m-%dT%H:%M:%SZ')
+        else:
+            data[date_column] = pd.to_datetime(data[date_column], infer_datetime_format=True)
+    except:
+        try:
+            data[date_column] = pd.to_datetime(data[date_column], format='%Y-%m-%d')
+        except:
+            try:
+                data[date_column] = pd.to_datetime(data[date_column], format='%d/%m/%Y')
+            except:
+                print("Formato data non riconosciuto")
+                return
+
+    data = data[data[value_column].notna()]
+    data = data[data[value_column] >= 0]
+    data = data.rename(columns={value_column: 'Close'})
+
+    data['Date'] = data[date_column].dt.date
+    aggregated_data = data.groupby('Date')['Close'].sum().reset_index()
+    aggregated_data['Date'] = pd.to_datetime(aggregated_data['Date'])
+    aggregated_data.set_index('Date', inplace=True)
+
+    data = aggregated_data.sort_index()
+    data = data.dropna()
+
+    print(f"Dataset caricato: {len(data)} osservazioni")
+    print(f"Periodo: {data.index[0].strftime('%Y-%m-%d')} → {data.index[-1].strftime('%Y-%m-%d')}")
+
+
+    seasonal_period = detect_optimal_seasonal_period(data['Close'])
+
+
+    train_size = len(data) - 12
+    train_data = data.iloc[:train_size]
+    test_data = data.iloc[train_size:]
+
+    print(f"\nDIVISIONE DATI :")
+    
+
+    print(f"Training: {len(train_data)} obs ({train_data.index[0].strftime('%Y-%m-%d')} → {train_data.index[-1].strftime('%Y-%m-%d')})")
+    if len(test_data) > 0:
+        print(f"Test: {len(test_data)} obs ({test_data.index[0].strftime('%Y-%m-%d')} → {test_data.index[-1].strftime('%Y-%m-%d')})")
+
+    optimal_order, optimal_seasonal_order = auto_sarima_order_selection(
+        train_data['Close'], seasonal_period)
+
+    forecast_periods = len(test_data)
+
+    forecast_result = fit_sarima_and_forecast(train_data['Close'], optimal_order, optimal_seasonal_order, forecast_periods)
+
+    if forecast_result is None:
+        print("Impossibile fittare il modello SARIMA")
+        return
+
+    fitted_values = forecast_result['fitted_model'].fittedvalues
+    metrics = calculate_forecast_metrics(train_data['Close'], fitted_values)
+
+    # confrontoo con test set
+    if len(test_data) > 0:
+        forecast_values = forecast_result['forecast_values']
+        n_test = min(len(test_data), len(forecast_values))
+
+        print(f"\nCONFRONTO PREVISIONI SARIMA vs TEST SET REALE:")
+        print("="*50)
+
+        test_mse = mean_squared_error(test_data['Close'].iloc[:n_test], forecast_values.iloc[:n_test])
+        test_mae = mean_absolute_error(test_data['Close'].iloc[:n_test], forecast_values.iloc[:n_test])
+        test_mape = np.mean(np.abs((test_data['Close'].iloc[:n_test] - forecast_values.iloc[:n_test]) / test_data['Close'].iloc[:n_test])) * 100
+        test_r2 = r2_score(test_data['Close'].iloc[:n_test], forecast_values.iloc[:n_test])
+
+        print(f"METRICHE OUT-OF-SAMPLE (Test Set):")
+        print(f"   R² Score: {test_r2:.4f}")
+        print(f"   MSE: {test_mse:.0f} voli²")
+        print(f"   RMSE: {np.sqrt(test_mse):.0f} voli")
+        print(f"   MAE: {test_mae:.0f} voli")
+        print(f"   MAPE: {test_mape:.2f}%")
+
+        print(f"\nCONFRONTO DETTAGLIATO (primi 5 giorni):")
+        for i in range(min(5, n_test)):
+            real_val = test_data['Close'].iloc[i]
+            pred_val = forecast_values.iloc[i]
+            error = abs(real_val - pred_val)
+            error_pct = (error / real_val) * 100
+            date_str = test_data.index[i].strftime('%Y-%m-%d')
+            print(f"   {date_str}: Reale={real_val:.0f}, Previsto={pred_val:.0f}, Errore={error:.0f} ({error_pct:.1f}%)")
+
+        metrics['test_r2'] = test_r2
+        metrics['test_mse'] = test_mse
+        metrics['test_rmse'] = np.sqrt(test_mse)
+        metrics['test_mae'] = test_mae
+        metrics['test_mape'] = test_mape
+        metrics['test_size'] = n_test
+        metrics['test_data'] = test_data['Close'].iloc[:n_test]
+        metrics['test_forecasts'] = forecast_values.iloc[:n_test]
+        metrics['test_dates'] = test_data.index[:n_test]
+
+    #visualize_sarima_results(data, forecast_result, optimal_order, optimal_seasonal_order, metrics)
+
+    #save_results_to_csv(data, forecast_result)
+
+    print(f"\n{'='*60}")
+    print(f"SARIMA{optimal_order}{optimal_seasonal_order} VOLI EUROPEI COMPLETATO")
+    print(f"AIC del modello: {forecast_result['aic']:.2f}")
+    print(f"R² in-sample: {metrics['r2_insample']:.4f}")
+    print(f"RMSE in-sample: {metrics['rmse_insample']:.0f} voli")
+    if 'test_r2' in metrics:
+        print(f"R² out-of-sample: {metrics['test_r2']:.4f}")
+        print(f"RMSE out-of-sample: {metrics['test_rmse']:.0f} voli")
+
+if __name__ == "__main__":
+    main()
