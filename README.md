@@ -47,7 +47,7 @@ Market data were retrieved through `yfinance`.
 data = yf.download(ticker, start=start_date)
 ```
 
-Depending on the model, the experiments used daily or weekly S&P 500 returns. HMMs were trained on weekly observations to reduce short-term noise and identify more persistent latent market regimes. fileciteturn2file8L526-L540
+Depending on the model, the experiments used daily or weekly S&P 500 returns. HMMs were trained on weekly observations to reduce short-term noise and identify more persistent latent market regimes.
 
 Some ARIMAX experiments also incorporated exogenous variables such as:
 
@@ -74,7 +74,7 @@ Move window forward
 Retrain
 ```
 
-For several models, the rolling training window corresponds to approximately two years of historical observations. fileciteturn2file5L266-L280
+For several models, the rolling training window corresponds to approximately two years of historical observations. 
 
 The main evaluation metric is **Directional Accuracy**.
 
