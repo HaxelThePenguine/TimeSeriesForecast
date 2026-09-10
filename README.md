@@ -200,6 +200,4 @@ Academic Year 2024/2025
 Computer Engineer  
 M.Sc. Cybersecurity — Politecnico di Torino
 
-Interests: Quantitative Research, Machine Learning, Market Microstructure, Low-Level Systems and FPGA Design
-
 GitHub: [HaxelThePenguine](https://github.com/HaxelThePenguine)
