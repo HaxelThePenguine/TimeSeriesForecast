@@ -56,7 +56,7 @@ Some ARIMAX experiments also incorporated exogenous variables such as:
 - Brent crude oil
 - inflation
 
-fileciteturn2file5L266-L282
+
 
 ### Walk-Forward Evaluation
 
@@ -92,9 +92,9 @@ The main evaluation metric is **Directional Accuracy**.
 | Logistic Regression | 52.16% | 57.59% | 55.07% |
 | Linear Regression | 51.00% | 51.31% | 54.96% |
 
-The best result was obtained by the **advanced two-state HMM**, reaching approximately **55.1% cumulative directional accuracy**. fileciteturn2file0L25-L43
+The best result was obtained by the **advanced two-state HMM**, reaching approximately **55.1% cumulative directional accuracy**. 
 
-These results should be interpreted as evidence of limited statistical predictability rather than as a complete trading strategy. Transaction costs, spread, slippage, market impact and execution constraints were outside the scope of the experiment. fileciteturn2file0L15-L24
+These results should be interpreted as evidence of limited statistical predictability rather than as a complete trading strategy. Transaction costs, spread, slippage, market impact and execution constraints were outside the scope of the experiment. 
 
 ---
 
@@ -115,7 +115,7 @@ The following models were compared:
 - SARIMA
 - ETS / Exponential Smoothing
 
-The final 12 days were reserved as an out-of-sample test set. fileciteturn2file5L285-L307
+The final 12 days were reserved as an out-of-sample test set. 
 
 ## Results
 
@@ -125,7 +125,7 @@ The final 12 days were reserved as an out-of-sample test set. fileciteturn
 | ARIMA | 3.43% | 0.083 | 1957 |
 | SARIMA | **1.98%** | **0.71** | **1081** |
 
-SARIMA achieved the best forecasting performance, benefiting from its explicit modeling of the strong seasonal structure of the series. fileciteturn2file1L53-L68
+SARIMA achieved the best forecasting performance, benefiting from its explicit modeling of the strong seasonal structure of the series. 
 
 ---
 
